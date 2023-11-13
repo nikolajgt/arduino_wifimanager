@@ -47,6 +47,8 @@ const char index_html[] PROGMEM = R"rawliteral(
 <head>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.7.2/css/all.css" integrity="sha384-fnmOCqbTlWIlj8LyTjo7mOUStjsKC4pOpQbqyi7RrhN7udi9RwhKkMHpvLbHG9Sr" crossorigin="anonymous">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  
   <style>
     html {
      font-family: Arial;
@@ -72,35 +74,62 @@ const char index_html[] PROGMEM = R"rawliteral(
     <span id="temperature">%TEMPERATURE%</span>
     <sup class="units">&deg;C</sup>
   </p>
-  <p>
-    <i class="fas fa-tint" style="color:#00add6;"></i> 
-    <span class="dht-labels">Humidity</span>
-    <span id="humidity">%HUMIDITY%</span>
-    <sup class="units">&percnt;</sup>
-  </p>
+  <canvas id="temperatureChart" width="400" height="400"></canvas>
 </body>
 <script>
-setInterval(function ( ) {
-  var xhttp = new XMLHttpRequest();
-  xhttp.onreadystatechange = function() {
-    if (this.readyState == 4 && this.status == 200) {
-      document.getElementById("temperature").innerHTML = this.responseText;
-    }
-  };
-  xhttp.open("GET", "/temperature", true);
-  xhttp.send();
-}, 10000 ) ;
+  const ctx = document.getElementById('temperatureChart').getContext('2d');
+  const temperatureChart = new Chart(ctx, {
+      type: 'line',
+      data: {
+          labels: [], // Time Labels
+          datasets: [{
+              label: 'Temperature',
+              data: [], // Temperature data
+              backgroundColor: 'rgba(255, 99, 132, 0.2)',
+              borderColor: 'rgba(255, 99, 132, 1)',
+              borderWidth: 1
+          }]
+      },
+      options: {
+          scales: {
+              y: {
+                  beginAtZero: true
+              }
+          }
+      }
+  });
 
-setInterval(function ( ) {
-  var xhttp = new XMLHttpRequest();
-  xhttp.onreadystatechange = function() {
-    if (this.readyState == 4 && this.status == 200) {
-      document.getElementById("humidity").innerHTML = this.responseText;
-    }
-  };
-  xhttp.open("GET", "/humidity", true);
-  xhttp.send();
-}, 10000 ) ;
+  function addData(chart, label, data) {
+      chart.data.labels.push(label);
+      chart.data.datasets.forEach((dataset) => {
+          dataset.data.push(data);
+      });
+      chart.update();
+  }
+
+  setInterval(function () {
+      var xhttp = new XMLHttpRequest();
+      xhttp.onreadystatechange = function() {
+          if (this.readyState == 4 && this.status == 200) {
+              const now = new Date();
+              const timeString = now.getHours() + ':' + now.getMinutes() + ':' + now.getSeconds();
+              addData(temperatureChart, timeString, parseFloat(this.responseText));
+          }
+      };
+      xhttp.open("GET", "/temperature", true);
+      xhttp.send();
+  }, 10000); // Fetch every 10 seconds
+
+  setInterval(function ( ) {
+    var xhttp = new XMLHttpRequest();
+    xhttp.onreadystatechange = function() {
+      if (this.readyState == 4 && this.status == 200) {
+        document.getElementById("temperature").innerHTML = this.responseText;
+      }
+    };
+    xhttp.open("GET", "/temperature", true);
+    xhttp.send();
+  }, 10000 ) ;
 </script>
 </html>)rawliteral";
 
