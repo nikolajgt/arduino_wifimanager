@@ -5,7 +5,7 @@
 #include "FS.h"
 #include "SD.h"
 #include "SPI.h"
-
+#include "SPIFFS.h"
 
 const char* ssid = "The_internet";
 const char* password = "Hm4p5m59";
@@ -151,25 +151,35 @@ void setup(){
   sensors.begin();
 
   WiFi.begin(ssid, password);
+
   while (WiFi.status() != WL_CONNECTED) {
     delay(1000);
     Serial.println("Connecting to WiFi..");
   }
   Serial.println(WiFi.localIP());
 
-  if (!SD.begin()) {
-    Serial.println("Card Mount Failed");
-    return;
-  }
-  uint8_t cardType = SD.cardType();
+  // if (!SD.begin()) {
+  //   Serial.println("Card Mount Failed");
+  //   return;
+  // }
+  // uint8_t cardType = SD.cardType();
 
-  if (cardType == CARD_NONE) {
-    Serial.println("No SD card attached");
-    return;
-  } 
+  // if (cardType == CARD_NONE) {
+  //   Serial.println("No SD card attached");
+  //   return;
+  // } 
 
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
     request->send_P(200, "text/html", index_html, processor);
+  });
+
+  server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
+    File file = SPIFFS.open("/index.html", "r");
+    if (!file) {
+      request->send(404, "text/plain", "File not found");
+      return;
+    }
+    request->send(SPIFFS, "/index.html", "text/html", processor);
   });
 
   server.on("/temperature", HTTP_GET, [](AsyncWebServerRequest *request){
