@@ -189,10 +189,9 @@ void setup(){
     request->send_P(200, "text/plain", read_temp("TEMPC").c_str());
   });
 
-  server.on("/log_temperature", HTTP_GET, [](AsyncWebServerRequest *request){
-    float temperature = read_temp("TEMPC").toFloat();
-    logTemperature(temperature);
-    request->send(200, "text/plain", "Temperature logged to file");
+  server.on("/historical_data", HTTP_GET, [](AsyncWebServerRequest *request){
+    String historicalData = getHistoricalData();
+    request->send(200, "text/plain", historicalData);
   });
 
   // Start server
