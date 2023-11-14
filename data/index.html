@@ -1,27 +1,88 @@
-<!DOCTYPE html>
-<html>
-  <head>
-    <title>ESP WEB SERVER</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link rel="stylesheet" type="text/css" href="style.css">
-    <link rel="icon" type="image/png" href="favicon.png">
-    <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.7.2/css/all.css" integrity="sha384-fnmOCqbTlWIlj8LyTjo7mOUStjsKC4pOpQbqyi7RrhN7udi9RwhKkMHpvLbHG9Sr" crossorigin="anonymous">
-  </head>
-  <body>
-    <div class="topnav">
-      <h1>ESP WEB SERVER</h1>
-    </div>
-    <div class="content">
-      <div class="card-grid">
-        <div class="card">
-          <p class="card-title"><i class="fas fa-lightbulb"></i> GPIO 2</p>
-          <p>
-            <a href="on"><button class="button-on">ON</button></a>
-            <a href="off"><button class="button-off">OFF</button></a>
-          </p>
-          <p class="state">State: %STATE%</p>
-        </div>
-      </div>
-    </div>
-  </body>
+<!DOCTYPE HTML><html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.7.2/css/all.css" integrity="sha384-fnmOCqbTlWIlj8LyTjo7mOUStjsKC4pOpQbqyi7RrhN7udi9RwhKkMHpvLbHG9Sr" crossorigin="anonymous">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  
+  <style>
+    html {
+     font-family: Arial;
+     display: inline-block;
+     margin: 0px auto;
+     text-align: center;
+    }
+    h2 { font-size: 3.0rem; }
+    p { font-size: 3.0rem; }
+    .units { font-size: 1.2rem; }
+    .dht-labels{
+      font-size: 1.5rem;
+      vertical-align:middle;
+      padding-bottom: 15px;
+    }
+  </style>
+</head>
+<body>
+  <h2>ESP32 DHT Server</h2>
+  <p>
+    <i class="fas fa-thermometer-half" style="color:#059e8a;"></i> 
+    <span class="dht-labels">Temperature</span> 
+    <span id="temperature">%TEMPERATURE%</span>
+    <sup class="units">&deg;C</sup>
+  </p>
+  <canvas id="temperatureChart" width="400" height="400"></canvas>
+</body>
+<script>
+  const ctx = document.getElementById('temperatureChart').getContext('2d');
+  const temperatureChart = new Chart(ctx, {
+      type: 'line',
+      data: {
+          labels: [], // Time Labels
+          datasets: [{
+              label: 'Temperature',
+              data: [], // Temperature data
+              backgroundColor: 'rgba(255, 99, 132, 0.2)',
+              borderColor: 'rgba(255, 99, 132, 1)',
+              borderWidth: 1
+          }]
+      },
+      options: {
+          scales: {
+              y: {
+                  beginAtZero: true
+              }
+          }
+      }
+  });
+
+  function addData(chart, label, data) {
+      chart.data.labels.push(label);
+      chart.data.datasets.forEach((dataset) => {
+          dataset.data.push(data);
+      });
+      chart.update();
+  }
+
+  function fetchData() {
+    var xhttp = new XMLHttpRequest();
+    xhttp.onreadystatechange = function() {
+      if (this.readyState == 4 && this.status == 200) {
+        const historicalData = this.responseText.split('\n').filter(Boolean); 
+        historicalData.forEach((entry, index) => {
+          const temperature = parseFloat(entry);
+          const now = new Date(new Date().getTime() - index * 10000); 
+          const timeString = now.getHours() + ':' + now.getMinutes() + ':' + now.getSeconds();
+          addData(temperatureChart, timeString, temperature);
+        });
+      }
+    };
+    xhttp.open("GET", "/historical_data", true);
+    xhttp.send();
+  }
+
+  // Fetch historical data when the page loads
+  fetchData();
+
+  // Fetch data every 10 seconds
+  setInterval(fetchData, 10000);
+</script>
 </html>

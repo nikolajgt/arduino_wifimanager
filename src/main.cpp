@@ -5,7 +5,8 @@
 #include "FS.h"
 #include "SD.h"
 #include "SPI.h"
-#include "SPIFFS.h"
+#include <SPIFFS.h>
+
 
 const char* ssid = "The_internet";
 const char* password = "Hm4p5m59";
@@ -56,95 +57,6 @@ String getHistoricalData() {
   return data;
 }
 
-const char index_html[] PROGMEM = R"rawliteral(
-<!DOCTYPE HTML><html>
-<head>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.7.2/css/all.css" integrity="sha384-fnmOCqbTlWIlj8LyTjo7mOUStjsKC4pOpQbqyi7RrhN7udi9RwhKkMHpvLbHG9Sr" crossorigin="anonymous">
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  
-  <style>
-    html {
-     font-family: Arial;
-     display: inline-block;
-     margin: 0px auto;
-     text-align: center;
-    }
-    h2 { font-size: 3.0rem; }
-    p { font-size: 3.0rem; }
-    .units { font-size: 1.2rem; }
-    .dht-labels{
-      font-size: 1.5rem;
-      vertical-align:middle;
-      padding-bottom: 15px;
-    }
-  </style>
-</head>
-<body>
-  <h2>ESP32 DHT Server</h2>
-  <p>
-    <i class="fas fa-thermometer-half" style="color:#059e8a;"></i> 
-    <span class="dht-labels">Temperature</span> 
-    <span id="temperature">%TEMPERATURE%</span>
-    <sup class="units">&deg;C</sup>
-  </p>
-  <canvas id="temperatureChart" width="400" height="400"></canvas>
-</body>
-<script>
-  const ctx = document.getElementById('temperatureChart').getContext('2d');
-  const temperatureChart = new Chart(ctx, {
-      type: 'line',
-      data: {
-          labels: [], // Time Labels
-          datasets: [{
-              label: 'Temperature',
-              data: [], // Temperature data
-              backgroundColor: 'rgba(255, 99, 132, 0.2)',
-              borderColor: 'rgba(255, 99, 132, 1)',
-              borderWidth: 1
-          }]
-      },
-      options: {
-          scales: {
-              y: {
-                  beginAtZero: true
-              }
-          }
-      }
-  });
-
-  function addData(chart, label, data) {
-      chart.data.labels.push(label);
-      chart.data.datasets.forEach((dataset) => {
-          dataset.data.push(data);
-      });
-      chart.update();
-  }
-
-  function fetchData() {
-    var xhttp = new XMLHttpRequest();
-    xhttp.onreadystatechange = function() {
-      if (this.readyState == 4 && this.status == 200) {
-        const historicalData = this.responseText.split('\n').filter(Boolean); 
-        historicalData.forEach((entry, index) => {
-          const temperature = parseFloat(entry);
-          const now = new Date(new Date().getTime() - index * 10000); 
-          const timeString = now.getHours() + ':' + now.getMinutes() + ':' + now.getSeconds();
-          addData(temperatureChart, timeString, temperature);
-        });
-      }
-    };
-    xhttp.open("GET", "/historical_data", true);
-    xhttp.send();
-  }
-
-  // Fetch historical data when the page loads
-  fetchData();
-
-  // Fetch data every 10 seconds
-  setInterval(fetchData, 10000);
-</script>
-</html>)rawliteral";
 
 void setup(){
   Serial.begin(115200);
@@ -169,17 +81,18 @@ void setup(){
   //   return;
   // } 
 
-  server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
-    request->send_P(200, "text/html", index_html, processor);
-  });
-
-  server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
-    File file = SPIFFS.open("/index.html", "r");
+ server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
+    File file = SPIFFS.open("/data/index.html", "r");
     if (!file) {
       request->send(404, "text/plain", "File not found");
       return;
     }
-    request->send(SPIFFS, "/index.html", "text/html", processor);
+    String htmlContent = "";
+    while (file.available()) {
+      htmlContent += file.readStringUntil('\n');
+    }
+    file.close();
+    request->send(200, "text/html", htmlContent);
   });
 
   server.on("/temperature", HTTP_GET, [](AsyncWebServerRequest *request){
