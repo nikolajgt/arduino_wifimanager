@@ -8,6 +8,9 @@
 #include "ESPAsyncWebServer.h"
 #include <OneWire.h>
 #include <DallasTemperature.h>
+#include "FS.h"
+#include "SD.h"
+#include "SPI.h"
 
 // Replace with your network credentials
 const char* ssid = "The_internet";
@@ -23,24 +26,44 @@ DallasTemperature sensors(&oneWire);
 // Create AsyncWebServer object on port 80
 AsyncWebServer server(80);
 
-String read_temp() {
+String read_temp(const String& var) {
   sensors.requestTemperatures(); 
-  float temperatureC = sensors.getTempCByIndex(0);
-  float temperatureF = sensors.getTempFByIndex(0);
-  return String(temperatureC);
+  if(var == "TEMPC")
+  {
+    return String(sensors.getTempCByIndex(0));
+  }
+  else{
+     return String(sensors.getTempFByIndex(0));
+  }
+}
+
+void logTemperature(float temperature) {
+    File file = SD.open("/temperature_log.txt", FILE_APPEND);
+    if (file) {
+        file.println(temperature);
+        file.close();
+    } else {
+        Serial.println("Error opening file for writing");
+    }
 }
 
 String processor(const String& var){
-  //Serial.println(var);
-  if(var == "TEMPERATURE"){
-    return read_temp();
-  }
-  else if(var == "HUMIDITY"){
-    return read_temp();
-  }
-  return String();
+  return read_temp(var);
 }
 
+String getHistoricalData() {
+  String data = "";
+  File file = SD.open("/temperature_log.txt", FILE_READ);
+  if (file) {
+    while (file.available()) {
+      data += file.readStringUntil('\n') + "\n";
+    }
+    file.close();
+  } else {
+    Serial.println("Error opening file for reading");
+  }
+  return data;
+}
 
 const char index_html[] PROGMEM = R"rawliteral(
 <!DOCTYPE HTML><html>
@@ -107,29 +130,28 @@ const char index_html[] PROGMEM = R"rawliteral(
       chart.update();
   }
 
-  setInterval(function () {
-      var xhttp = new XMLHttpRequest();
-      xhttp.onreadystatechange = function() {
-          if (this.readyState == 4 && this.status == 200) {
-              const now = new Date();
-              const timeString = now.getHours() + ':' + now.getMinutes() + ':' + now.getSeconds();
-              addData(temperatureChart, timeString, parseFloat(this.responseText));
-          }
-      };
-      xhttp.open("GET", "/temperature", true);
-      xhttp.send();
-  }, 10000); // Fetch every 10 seconds
-
-  setInterval(function ( ) {
+  function fetchData() {
     var xhttp = new XMLHttpRequest();
     xhttp.onreadystatechange = function() {
       if (this.readyState == 4 && this.status == 200) {
-        document.getElementById("temperature").innerHTML = this.responseText;
+        const historicalData = this.responseText.split('\n').filter(Boolean); // Remove empty lines
+        historicalData.forEach((entry, index) => {
+          const temperature = parseFloat(entry);
+          const now = new Date(new Date().getTime() - index * 10000); // Simulate timestamps
+          const timeString = now.getHours() + ':' + now.getMinutes() + ':' + now.getSeconds();
+          addData(temperatureChart, timeString, temperature);
+        });
       }
     };
-    xhttp.open("GET", "/temperature", true);
+    xhttp.open("GET", "/historical_data", true);
     xhttp.send();
-  }, 10000 ) ;
+  }
+
+  // Fetch historical data when the page loads
+  fetchData();
+
+  // Fetch data every 10 seconds
+  setInterval(fetchData, 10000);
 </script>
 </html>)rawliteral";
 
@@ -140,30 +162,45 @@ const char index_html[] PROGMEM = R"rawliteral(
 
 void setup(){
   Serial.begin(115200);
-  Serial.println("test");
   sensors.begin();
 
   WiFi.begin(ssid, password);
-
   while (WiFi.status() != WL_CONNECTED) {
     delay(1000);
     Serial.println("Connecting to WiFi..");
   }
-  // Print ESP32 Local IP Address
   Serial.println(WiFi.localIP());
+
+  if (!SD.begin()) {
+    Serial.println("Card Mount Failed");
+    return;
+  }
+  uint8_t cardType = SD.cardType();
+
+  if (cardType == CARD_NONE) {
+    Serial.println("No SD card attached");
+    return;
+  } 
 
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
     request->send_P(200, "text/html", index_html, processor);
   });
   server.on("/temperature", HTTP_GET, [](AsyncWebServerRequest *request){
-    request->send_P(200, "text/plain", read_temp().c_str());
+    request->send_P(200, "text/plain", read_temp("TEMPC").c_str());
   });
 
+  server.on("/log_temperature", HTTP_GET, [](AsyncWebServerRequest *request){
+    float temperature = read_temp("TEMPC").toFloat();
+    logTemperature(temperature);
+    request->send(200, "text/plain", "Temperature logged to file");
+  });
 
   // Start server
   server.begin();
 }
  
 void loop(){
-  
+  float temperature = read_temp("TEMPC").toFloat();
+  logTemperature(temperature);
+  delay(1000);
 }
