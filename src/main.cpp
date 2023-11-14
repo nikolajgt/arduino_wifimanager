@@ -1,9 +1,3 @@
-/*********
-  Rui Santos
-  Complete project details at https://randomnerdtutorials.com  
-*********/
-
-// Import required libraries
 #include "WiFi.h"
 #include "ESPAsyncWebServer.h"
 #include <OneWire.h>
@@ -12,18 +6,15 @@
 #include "SD.h"
 #include "SPI.h"
 
-// Replace with your network credentials
+
 const char* ssid = "The_internet";
 const char* password = "Hm4p5m59";
 
-
 const int oneWireBus = 4;     
-// Setup a oneWire instance to communicate with any OneWire devices
 OneWire oneWire(oneWireBus);
-// Pass our oneWire reference to Dallas Temperature sensor 
+
 DallasTemperature sensors(&oneWire);
 
-// Create AsyncWebServer object on port 80
 AsyncWebServer server(80);
 
 String read_temp(const String& var) {
@@ -134,10 +125,10 @@ const char index_html[] PROGMEM = R"rawliteral(
     var xhttp = new XMLHttpRequest();
     xhttp.onreadystatechange = function() {
       if (this.readyState == 4 && this.status == 200) {
-        const historicalData = this.responseText.split('\n').filter(Boolean); // Remove empty lines
+        const historicalData = this.responseText.split('\n').filter(Boolean); 
         historicalData.forEach((entry, index) => {
           const temperature = parseFloat(entry);
-          const now = new Date(new Date().getTime() - index * 10000); // Simulate timestamps
+          const now = new Date(new Date().getTime() - index * 10000); 
           const timeString = now.getHours() + ':' + now.getMinutes() + ':' + now.getSeconds();
           addData(temperatureChart, timeString, temperature);
         });
@@ -154,11 +145,6 @@ const char index_html[] PROGMEM = R"rawliteral(
   setInterval(fetchData, 10000);
 </script>
 </html>)rawliteral";
-
-// Replaces placeholder with DHT values
-
-
-
 
 void setup(){
   Serial.begin(115200);
@@ -185,6 +171,7 @@ void setup(){
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
     request->send_P(200, "text/html", index_html, processor);
   });
+
   server.on("/temperature", HTTP_GET, [](AsyncWebServerRequest *request){
     request->send_P(200, "text/plain", read_temp("TEMPC").c_str());
   });
@@ -194,7 +181,7 @@ void setup(){
     request->send(200, "text/plain", historicalData);
   });
 
-  // Start server
+
   server.begin();
 }
  
