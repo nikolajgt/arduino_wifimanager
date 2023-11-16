@@ -7,7 +7,7 @@
 #include "SPI.h"
 #include "SPIFFS.h"
 #include "LittleFS.h"
-
+#include <Arduino_JSON.h>
 
 const char* ssid = "The_internet";
 const char* password = "Hm4p5m59";
@@ -20,6 +20,12 @@ DallasTemperature sensors(&oneWire);
 
 AsyncWebServer server(80);
 
+AsyncWebSocket ws("/ws");
+JSONVar readings;
+unsigned long lastTime = 0;
+unsigned long timerDelay = 30000;
+
+
 String read_temp(const String& var) {
   sensors.requestTemperatures(); 
   if(var == "TEMPC")
@@ -29,6 +35,39 @@ String read_temp(const String& var) {
   else{
      return String(sensors.getTempFByIndex(0));
   }
+}
+
+void notifyClients(String sensorReadings) {
+  ws.textAll(sensorReadings);
+}
+
+void handleWebSocketMessage(void *arg, uint8_t *data, size_t len) {
+  AwsFrameInfo *info = (AwsFrameInfo*)arg;
+  if (info->final && info->index == 0 && info->len == len && info->opcode == WS_TEXT) {
+      ws.textAll(latestItmes);
+  }
+}
+
+void onEvent(AsyncWebSocket *server, AsyncWebSocketClient *client, AwsEventType type, void *arg, uint8_t *data, size_t len) {
+  switch (type) {
+    case WS_EVT_CONNECT:
+      Serial.printf("WebSocket client #%u connected from %s\n", client->id(), client->remoteIP().toString().c_str());
+      break;
+    case WS_EVT_DISCONNECT:
+      Serial.printf("WebSocket client #%u disconnected\n", client->id());
+      break;
+    case WS_EVT_DATA:
+      handleWebSocketMessage(arg, data, len);
+      break;
+    case WS_EVT_PONG:
+    case WS_EVT_ERROR:
+      break;
+  }
+}
+
+void initWebSocket() {
+  ws.onEvent(onEvent);
+  server.addHandler(&ws);
 }
 
 void logTemperature(float temperature) {
@@ -41,9 +80,7 @@ void logTemperature(float temperature) {
     }
 }
 
-String processor(const String& var){
-  return read_temp(var);
-}
+
 
 void syncHistoricalData() {
   String data = "";
@@ -72,7 +109,7 @@ void syncHistoricalData() {
       if (endPos > 0) {
         file.seek(endPos - 1);
       } else {
-        break;  // Reached the beginning of the file
+        break;  
       }
     }
 
@@ -83,12 +120,6 @@ void syncHistoricalData() {
 
   latestItmes = data;
 }
-
-
-String getHistoricalData1() {
-    return "22 \n";
-}
-
 
 
 void initSPIFFS() {
@@ -122,15 +153,6 @@ void setup(){
     return;
   } 
 
-  File file = SPIFFS.open("/index.html", "r");
-  if(file.available())
-  {
-    Serial.println(file.name());
-  }else {
-    Serial.println("not found");
-  }
-  
-
   server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
     request->send(SPIFFS, "/index.html", "text/html", false);
   });
@@ -143,7 +165,7 @@ void setup(){
     request->send(200, "text/plain", latestItmes);
   });
 
-
+   server.serveStatic("/", SPIFFS, "/");
   server.begin();
 }
  
@@ -151,7 +173,15 @@ void loop(){
   float temperature = read_temp("TEMPC").toFloat();
   logTemperature(temperature);
   syncHistoricalData();
+
+  if ((millis() - lastTime) > timerDelay) {
+    String sensorReadings = latestItmes;
+    Serial.print(sensorReadings);
+    notifyClients(sensorReadings);
+    lastTime = millis();
+  }
+
+
+  ws.cleanupClients();
   delay(5000);
-  // String temp = read_temp("TEMPC");
-  // Serial.println(temp);
 }
