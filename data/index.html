@@ -22,7 +22,6 @@
   </style>
 </head>
 <body>
-  <h2>ESP32 DHT Server</h2>
   <p>
     <i class="fas fa-thermometer-half" style="color:#059e8a;"></i> 
     <span class="dht-labels">Temperature</span> 
@@ -66,20 +65,34 @@
     var xhttp = new XMLHttpRequest();
     xhttp.onreadystatechange = function() {
       if (this.readyState == 4 && this.status == 200) {
-        const historicalData = this.responseText.split('\n').filter(Boolean); 
-        historicalData.forEach((entry, index) => {
-          const temperature = parseFloat(entry);
-          const now = new Date(new Date().getTime() - index * 10000); 
-          const timeString = now.getHours() + ':' + now.getMinutes() + ':' + now.getSeconds();
-          addData(temperatureChart, timeString, temperature);
-        });
+        document.getElementById("temperature").innerHTML = this.responseText + " &deg;C";
+        console.log(this.responseText);
       }
     };
-    xhttp.open("GET", "/historical_data", true);
+    xhttp.open("GET", "/temperature", true);
     xhttp.send();
-  }
 
-  // Fetch historical data when the page loads
+   // Fetch historical data for the graph
+    var historicalData = [];
+    xhttp = new XMLHttpRequest();
+    xhttp.onreadystatechange = function() {
+    if (this.readyState == 4 && this.status == 200) {
+      historicalData = this.responseText.split('\n').filter(Boolean);
+      temperatureChart.data.labels = [];
+      temperatureChart.data.datasets[0].data = [];
+      historicalData.forEach((entry, index) => {
+        const temperature = parseFloat(entry);
+        const now = new Date(new Date().getTime() - index * 10000);
+        const timeString = now.getHours() + ':' + now.getMinutes() + ':' + now.getSeconds();
+        addData(temperatureChart, timeString, temperature);
+      });
+    }
+  };
+  xhttp.open("GET", "/historical_data", true);
+  xhttp.send();
+}
+
+
   fetchData();
 
   // Fetch data every 10 seconds

@@ -5,7 +5,8 @@
 #include "FS.h"
 #include "SD.h"
 #include "SPI.h"
-#include <SPIFFS.h>
+#include "SPIFFS.h"
+#include "LittleFS.h"
 
 
 const char* ssid = "The_internet";
@@ -13,6 +14,7 @@ const char* password = "Hm4p5m59";
 
 const int oneWireBus = 4;     
 OneWire oneWire(oneWireBus);
+String latestItmes;
 
 DallasTemperature sensors(&oneWire);
 
@@ -43,25 +45,64 @@ String processor(const String& var){
   return read_temp(var);
 }
 
-String getHistoricalData() {
+void syncHistoricalData() {
   String data = "";
+
+  int maxItems = 50;
   File file = SD.open("/temperature_log.txt", FILE_READ);
+  
   if (file) {
-    while (file.available()) {
-      data += file.readStringUntil('\n') + "\n";
+    int startPos = 0;
+    int endPos = 0;
+    int lineCount = 0;
+
+    file.seek(0, SeekEnd);
+    
+    while (lineCount < maxItems) {
+      endPos = file.position();
+      while (endPos > 0 && file.read() != '\n') {
+        file.seek(endPos - 1);
+        endPos = file.position();
+      }
+
+      String line = file.readStringUntil('\n');
+      data = line + "\n" + data;
+      lineCount++;
+
+      if (endPos > 0) {
+        file.seek(endPos - 1);
+      } else {
+        break;  // Reached the beginning of the file
+      }
     }
+
     file.close();
   } else {
     Serial.println("Error opening file for reading");
   }
-  return data;
+
+  latestItmes = data;
+}
+
+
+String getHistoricalData1() {
+    return "22 \n";
+}
+
+
+
+void initSPIFFS() {
+  if (!SPIFFS.begin(true)) {
+    Serial.println("An error has occurred while mounting SPIFFS");
+  }
+  Serial.println("SPIFFS mounted successfully");
 }
 
 
 void setup(){
   Serial.begin(115200);
   sensors.begin();
-
+  initSPIFFS();
   WiFi.begin(ssid, password);
 
   while (WiFi.status() != WL_CONNECTED) {
@@ -70,29 +111,28 @@ void setup(){
   }
   Serial.println(WiFi.localIP());
 
-  // if (!SD.begin()) {
-  //   Serial.println("Card Mount Failed");
-  //   return;
-  // }
-  // uint8_t cardType = SD.cardType();
+  if (!SD.begin()) {
+    Serial.println("Card Mount Failed");
+    return;
+  }
+  uint8_t cardType = SD.cardType();
 
-  // if (cardType == CARD_NONE) {
-  //   Serial.println("No SD card attached");
-  //   return;
-  // } 
+  if (cardType == CARD_NONE) {
+    Serial.println("No SD card attached");
+    return;
+  } 
 
- server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
-    File file = SPIFFS.open("/data/index.html", "r");
-    if (!file) {
-      request->send(404, "text/plain", "File not found");
-      return;
-    }
-    String htmlContent = "";
-    while (file.available()) {
-      htmlContent += file.readStringUntil('\n');
-    }
-    file.close();
-    request->send(200, "text/html", htmlContent);
+  File file = SPIFFS.open("/index.html", "r");
+  if(file.available())
+  {
+    Serial.println(file.name());
+  }else {
+    Serial.println("not found");
+  }
+  
+
+  server.on("/", HTTP_GET, [](AsyncWebServerRequest *request){
+    request->send(SPIFFS, "/index.html", "text/html", false);
   });
 
   server.on("/temperature", HTTP_GET, [](AsyncWebServerRequest *request){
@@ -100,8 +140,7 @@ void setup(){
   });
 
   server.on("/historical_data", HTTP_GET, [](AsyncWebServerRequest *request){
-    String historicalData = getHistoricalData();
-    request->send(200, "text/plain", historicalData);
+    request->send(200, "text/plain", latestItmes);
   });
 
 
@@ -111,5 +150,8 @@ void setup(){
 void loop(){
   float temperature = read_temp("TEMPC").toFloat();
   logTemperature(temperature);
-  delay(1000);
+  syncHistoricalData();
+  delay(5000);
+  // String temp = read_temp("TEMPC");
+  // Serial.println(temp);
 }
