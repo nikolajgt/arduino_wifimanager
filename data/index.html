@@ -52,7 +52,7 @@
           }
       }
   });
-  const ws = new WebSocket('ws://[192.168.1.116]/ws');
+
 
   function addData(chart, label, data) {
       chart.data.labels.push(label);
@@ -61,6 +61,9 @@
       });
       chart.update();
   }
+  const gateway = 'ws://192.168.1.116/ws';
+  window.addEventListener('load', onload);
+  var websocket;
 
   function onload(event) {
       initWebSocket();
@@ -77,6 +80,7 @@
       websocket.onclose = onClose;
       websocket.onmessage = onMessage;
   }
+
   function onOpen(event) {
     console.log('Connection opened');
     getReadings();
@@ -88,8 +92,15 @@
   }
 
   function onMessage(event) {
-    const data = JSON.parse(event.data);
-    console.log(event.data);
+    historicalData = event.data.toString().split('\n').filter(Boolean);
+      temperatureChart.data.labels = [];
+      temperatureChart.data.datasets[0].data = [];
+      historicalData.forEach((entry, index) => {
+        const temperature = parseFloat(entry);
+        const now = new Date(new Date().getTime() - index * 10000);
+        const timeString = now.getHours() + ':' + now.getMinutes() + ':' + now.getSeconds();
+        addData(temperatureChart, timeString, temperature);
+      });
   }
 
   function fetchData() {
@@ -102,26 +113,7 @@
     };
     xhttp.open("GET", "/temperature", true);
     xhttp.send();
-
-   // Fetch historical data for the graph
-    var historicalData = [];
-    xhttp = new XMLHttpRequest();
-    xhttp.onreadystatechange = function() {
-    if (this.readyState == 4 && this.status == 200) {
-      historicalData = this.responseText.split('\n').filter(Boolean);
-      temperatureChart.data.labels = [];
-      temperatureChart.data.datasets[0].data = [];
-      historicalData.forEach((entry, index) => {
-        const temperature = parseFloat(entry);
-        const now = new Date(new Date().getTime() - index * 10000);
-        const timeString = now.getHours() + ':' + now.getMinutes() + ':' + now.getSeconds();
-        addData(temperatureChart, timeString, temperature);
-      });
-    }
-  };
-  xhttp.open("GET", "/historical_data", true);
-  xhttp.send();
-}
+  }
 
 
   fetchData();
